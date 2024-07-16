@@ -1,0 +1,5 @@
+,file_name,transcription,sentiment,score
+0,Adver.wav, 2x2 creatures all large and small,POSITIVE,0.9886943697929382
+1,Conference.wav, This is Peter. This is Johnny. Kenny. And Josh. We just wanted to take a minute to thank you.,POSITIVE,0.9997157454490662
+2,Television.wav," It was Dark Times, Harry. Dark Times. Voldemort started to gather some followers.",POSITIVE,0.7131405472755432
+3,Trailer.wav," No matter what your format is, you need to keep things excited. You want listeners to remember...",POSITIVE,0.9985918402671814

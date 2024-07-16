@@ -1,28 +1,21 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS  # Import CORS from flask_cors
-
-import requests
+from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask_cors import CORS
 import whisper
 from transformers import pipeline
 import os
-import pandas as pd
-
 import ssl
-
+import pandas as pd
+import io
 try:
     _create_unverified_https_context = ssl._create_unverified_context
 except AttributeError:
-    # Legacy Python that doesn't verify HTTPS certificates by default
     pass
 else:
-    # Handle target environment that doesn't support HTTPS verification
     ssl._create_default_https_context = _create_unverified_https_context
 
 app = Flask(__name__)
-CORS(app)  # Use CORS with your Flask app
-
-session = requests.Session()
-session.verify = False
+CORS(app)
+os.makedirs('static', exist_ok=True)
 model = whisper.load_model("small")
 sentiment_analyzer = pipeline("sentiment-analysis")
 
@@ -40,32 +33,49 @@ def index():
 
 @app.route('/transcribe_and_analyze', methods=['POST'])
 def transcribe_and_analyze():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files part'}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    files = request.files.getlist('files')
+    results = []
+    results1 = []
+    for file in files:
+        if file and file.filename.endswith('.wav'):
+            file_path = os.path.join('/tmp', file.filename)
+            file.save(file_path)
 
-    if file and file.filename.endswith('.wav'):
-        file_path = os.path.join('/tmp', file.filename)
-        file.save(file_path)
-        
-        try:
-            transcription = transcribe_audio(file_path)
-            sentiment = analyze_sentiment(transcription)
-            
-            result_dict = {
-                'file_name': file.filename,
-                'text_infile': transcription,
-                'sentiment_infile': sentiment
-            }
-            return jsonify(result_dict), 200
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-        finally:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-    else:
-        return jsonify({'error': 'Invalid file type, only .wav files are accepted'}), 400
-    from app import app
+            try:
+                transcription = transcribe_audio(file_path)
+                sentiment = analyze_sentiment(transcription)
+                print(sentiment)
+                result_dict = {
+                    'file_name': file.filename,
+                    'transcription': transcription,
+                    'sentiment': sentiment[0]  # Assuming the first result is the most relevant
+                }
+                result_dict1 = {
+                    'file_name': file.filename,
+                    'transcription': transcription,
+                    'sentiment': sentiment[0]['label'],
+                    #   'score':   sentiment[0].score# Assuming the first result is the most relevant
+                    # 'sentiment' : sentiment.label,
+                    'score' : sentiment[0]['score']
+                }
+                results.append(result_dict)
+                results1.append(result_dict1)
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+            finally:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+        else:
+            return jsonify({'error': 'Invalid file type, only .wav files are accepted'}), 400
+    df_all = pd.DataFrame(results1)
+    df_all.to_csv('transcription.csv')
+    csv_file_path = os.path.join('static', 'transcription.csv')
+    df_all.to_csv(csv_file_path, index=True)
+
+    return jsonify({'results': results, 'csv_link': f'http://localhost:5000/static/transcription.csv'}), 200
+    return jsonify({'results': results}), 200
+if __name__ == "__main__":
+    app.run(debug=True)
